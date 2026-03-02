@@ -1,7 +1,16 @@
+# ── Secrets & credentials ──
 .env
 *.key
 *.pem
 credentials/
 sessions/
+
+# ── Runtime / build artifacts ──
 node_modules/
+*.log
+
+# ── OS junk ──
 .DS_Store
+Thumbs.db
+*~
+*.swp

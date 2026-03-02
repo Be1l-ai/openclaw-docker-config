@@ -1,0 +1,20 @@
+# ── Build / IDE artifacts ──
+.git
+.github
+.githooks
+.vscode
+*.swp
+*.swo
+*~
+
+# ── Scripts (dev-only, not needed in image) ──
+scripts/
+
+# ── Documentation (not needed in image) ──
+README.md
+LICENSE
+.env.example
+
+# ── OS junk ──
+.DS_Store
+Thumbs.db
