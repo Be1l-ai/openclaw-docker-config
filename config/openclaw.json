@@ -1,10 +1,10 @@
 {
-  "_comment": "OpenClaw config — Hugging Face Spaces (Gemini 2.5 Flash)",
-
   "gateway": {
     "mode": "local",
     "port": 7860,
-    "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    "auth": {
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    }
   },
 
   "channels": {
@@ -40,23 +40,6 @@
     }
   },
 
-  "skills": {
-    "shell":       { "enabled": false },
-    "playwright":  {
-      "enabled": true,
-      "launchArgs": [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage"
-      ]
-    },
-    "fs":          {
-      "enabled": true,
-      "sandbox": "/app/data/workspace"
-    },
-    "slidespeak":  { "enabled": true }
-  },
-
   "commands": {
     "native": "auto",
     "nativeSkills": "auto"
@@ -75,25 +58,6 @@
     },
     "order": {
       "google": ["google:studio"]
-    }
-  },
-
-  "storage": {
-    "_comment": "Set STORAGE_MODE=supabase in env to enable persistent storage. Without it, everything stays local (ephemeral on HF Spaces).",
-    "mode": "${STORAGE_MODE:-local}",
-    "supabase": {
-      "url": "${SUPABASE_URL}",
-      "anonKey": "${SUPABASE_ANON_KEY}",
-      "serviceRoleKey": "${SUPABASE_SERVICE_ROLE_KEY}",
-      "database": {
-        "conversations": true,
-        "memory": true,
-        "agentState": true
-      },
-      "fileStorage": {
-        "enabled": true,
-        "bucket": "${SUPABASE_STORAGE_BUCKET:-openclaw-workspace}"
-      }
     }
   },
 
