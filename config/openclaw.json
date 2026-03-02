@@ -1,7 +1,10 @@
 {
+  "_comment": "OpenClaw config — Hugging Face Spaces (Gemini 2.5 Flash)",
+
   "gateway": {
     "mode": "local",
-    "port": 18789
+    "port": 7860,
+    "token": "${OPENCLAW_GATEWAY_TOKEN}"
   },
 
   "channels": {
@@ -25,16 +28,33 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "anthropic/claude-opus-4-6"
+        "primary": "google/gemini-2.5-flash"
       },
       "compaction": {
         "mode": "safeguard"
       },
       "maxConcurrent": 2,
       "subagents": {
-        "maxConcurrent": 4
+        "maxConcurrent": 3
       }
     }
+  },
+
+  "skills": {
+    "shell":       { "enabled": false },
+    "playwright":  {
+      "enabled": true,
+      "launchArgs": [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage"
+      ]
+    },
+    "fs":          {
+      "enabled": true,
+      "sandbox": "/app/data/workspace"
+    },
+    "slidespeak":  { "enabled": true }
   },
 
   "commands": {
@@ -48,13 +68,32 @@
 
   "auth": {
     "profiles": {
-      "anthropic:manual": {
-        "provider": "anthropic",
+      "google:studio": {
+        "provider": "google",
         "mode": "token"
       }
     },
     "order": {
-      "anthropic": ["anthropic:manual"]
+      "google": ["google:studio"]
+    }
+  },
+
+  "storage": {
+    "_comment": "Set STORAGE_MODE=supabase in env to enable persistent storage. Without it, everything stays local (ephemeral on HF Spaces).",
+    "mode": "${STORAGE_MODE:-local}",
+    "supabase": {
+      "url": "${SUPABASE_URL}",
+      "anonKey": "${SUPABASE_ANON_KEY}",
+      "serviceRoleKey": "${SUPABASE_SERVICE_ROLE_KEY}",
+      "database": {
+        "conversations": true,
+        "memory": true,
+        "agentState": true
+      },
+      "fileStorage": {
+        "enabled": true,
+        "bucket": "${SUPABASE_STORAGE_BUCKET:-openclaw-workspace}"
+      }
     }
   },
 
