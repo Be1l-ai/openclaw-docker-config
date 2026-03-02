@@ -1,317 +1,297 @@
-# OpenClaw Docker Config
+---
+title: OpenClaw CS Assistant
+emoji: 🧠
+colorFrom: indigo
+colorTo: cyan
+sdk: docker
+app_port: 7860
+pinned: false
+---
 
-Docker configuration and application setup for OpenClaw. Companion repository to [openclaw-terraform-hetzner](https://github.com/andreesg/openclaw-terraform-hetzner).
+# OpenClaw CS Assistant
 
-**Note:** This is a minimal, generic configuration with only essential skills activated. You're encouraged to customize it by adding [ClawHub skills](https://clawhub.ai/) or creating your own custom skills (see [Working with Skills](#working-with-skills)).
+AI-powered research and productivity assistant for Computer Science students,
+running on **Hugging Face Spaces** (free CPU Basic tier).
 
-```
-┌──────────────┐                        ┌──────────────────────┐
-│   Laptop     │──── git push ─────────▶│   GitHub             │
-│   (develop)  │                        │   (openclaw-config)  │
-│              │                        └──────────────────────┘
-│              │  build-and-push.sh
-│              │───────────────────────▶ ┌──────────────────────┐
-│              │                        │   GHCR               │
-│              │                        │   :latest  :abc1234  │
-│              │                        └──────────────────────┘
-│              │
-│              │  make push-config       ┌──────────────────────┐
-│              │  make push-env          │   Hetzner VPS        │
-│              │──── (infra repo) ──────▶│   ┌────────────────┐ │
-│              │  make deploy            │   │ Docker         │ │
-└──────────────┘                        │   │ openclaw-gw    │ │
-                                        │   └────────────────┘ │
-                                        │   :18789 (loopback)  │
-                                        └──────────────────────┘
-```
+Built on [OpenClaw](https://openclaw.ai/) with **Google Gemini 2.5 Flash** as
+the primary model.
 
-## Prerequisites
+## What It Does
 
-- Docker and Docker Compose on the VPS
-- SSH access to the VPS (`ssh openclaw@VPS_IP`)
-- The infra repo (`openclaw-terraform-hetzner`) set up with `config/inputs.sh` pointing `CONFIG_DIR` to this repo
-- API keys (see `docker/.env.example` for the full list; secrets live in the infra repo's `secrets/openclaw.env`)
+| Capability | How |
+|------------|-----|
+| **Web Research** | Headless Chromium via Playwright — browse any site, JS-heavy or paywalled |
+| **Document Generation** | Markdown reports, academic summaries, formatted docs |
+| **Presentations** | Slide decks from prompts or outlines (SlideSPeak skill) |
+| **YouTube** | Fetch transcripts, search videos for lecture material |
+| **Math & Code** | LaTeX equations, clean code in Python / JS / C++ / Java |
+| **GitHub** | Create issues, review PRs, check CI runs |
+| **Autonomous Tasks** | Morning assignment summaries via HEARTBEAT schedule |
 
-## How This Repo Connects to the VPS
+---
 
-This repo is **not cloned on the VPS**. Instead, the infra repo's scripts copy
-specific files from your local checkout to the VPS:
+## Quick Deploy
 
-| What | Pushed by | Lands at (VPS) |
-|------|-----------|----------------|
-| `docker/docker-compose.yml` | `make bootstrap` (once) | `~/openclaw/docker-compose.yml` |
-| `config/*` (openclaw.json, etc.) | `make push-config` | `~/.openclaw/` |
-| Docker image | `make deploy` (pulls from GHCR) | Docker image cache |
-| Secrets | `make push-env` | `~/openclaw/.env` |
+### 1. Fork & Create Space
 
-## First-Time Setup
+1. **Fork** this repository on GitHub
+2. Go to [huggingface.co/new-space](https://huggingface.co/new-space)
+3. Choose **Docker** as the SDK
+4. Link your forked GitHub repo (or push directly to the Space repo)
 
-> Provisioning and bootstrap are handled by the infra repo. See its README.
+### 2. Add Secrets
 
-1. **In the infra repo**, set `CONFIG_DIR` in `config/inputs.sh` to point to this repo's directory
-2. **Log in to GHCR** (one-time, on your laptop):
-   ```bash
-   echo "$GHCR_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
-   ```
-3. **Build and push the Docker image**:
-   ```bash
-   bash scripts/build-and-push.sh
-   ```
-4. Run `make bootstrap` from the infra repo — copies `docker-compose.yml`, config, and secrets to VPS
-5. Run `make deploy` from the infra repo — pulls the Docker image from GHCR and starts the container
-6. **Complete Telegram pairing:** open Telegram, find your bot, send `/start`
+In **Space Settings → Repository secrets**, add:
 
-## Config Change Workflow
+| Secret | Required | Description |
+|--------|----------|-------------|
+| `GOOGLE_API_KEY` | **Yes** | Google AI Studio key — [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| `OPENCLAW_GATEWAY_TOKEN` | **Yes** | Any strong random string — protects the web dashboard |
+| `TELEGRAM_BOT_TOKEN` | No | Enables the Telegram channel ([@BotFather](https://t.me/BotFather)) |
+| `GH_TOKEN` | No | Enables the GitHub skill (issues, PRs, CI) |
+| `BRAVE_API_KEY` | No | Enables Brave web search for the Daily Tech Brief |
+| `STORAGE_MODE` | No | Set to `supabase` for persistent storage (default: `local`) |
+| `SUPABASE_URL` | No* | Supabase project URL (required if `STORAGE_MODE=supabase`) |
+| `SUPABASE_ANON_KEY` | No* | Supabase anon key (required if `STORAGE_MODE=supabase`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | No* | Supabase service role key (required if `STORAGE_MODE=supabase`) |
+| `SUPABASE_STORAGE_BUCKET` | No | Supabase storage bucket name (default: `openclaw-workspace`) |
 
-There are two types of changes, and they have different workflows:
+> **Tip:** Generate a gateway token quickly:
+> `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`
 
-### Changing config (openclaw.json, skills, hooks)
+See [.env.example](.env.example) for the full reference.
 
-Config files are pushed to the VPS via SCP — no image rebuild needed.
+### 3. Deploy
 
-```
-edit → validate → commit → push → make push-config (infra repo)
-```
+The Space auto-builds and starts. Once the build finishes, open your Space URL
+to access the OpenClaw dashboard on port **7860**.
 
-1. Edit files in `config/`, `skills/`, or `hooks/`
-2. Validate: `bash scripts/validate-config.sh`
-3. Commit and push to GitHub
-4. From the **infra repo**: `make push-config` (SCPs config to VPS and restarts)
+### 4. (Optional) Pair Telegram
 
-### Changing the Docker image (Dockerfile, OpenClaw version)
+If you set `TELEGRAM_BOT_TOKEN`, open Telegram, find your bot, and send
+`/start` to complete pairing.
 
-Image changes require a rebuild and push to GHCR.
+---
+
+## Project Structure
 
 ```
-edit → commit → push → build-and-push.sh → make deploy (infra repo)
+.
+├── Dockerfile              ← HF Spaces Docker build
+├── entrypoint.sh           ← Startup: seed config, install skills, launch gateway
+├── .env.example            ← Environment variable reference
+├── .dockerignore
+├── config/
+│   ├── openclaw.json       ← Gateway, model, auth, skills, logging config
+│   ├── SOUL.md             ← Agent persona & formatting rules
+│   ├── HEARTBEAT.md        ← Autonomous scheduled tasks
+│   ├── security-rules.md   ← Security guardrails (injected into system prompt)
+│   └── skills-manifest.txt ← ClawHub skills auto-installed on startup
+├── workspace-templates/    ← Seeded into workspace on first boot
+├── scripts/
+│   ├── validate-config.sh  ← JSON lint + no-raw-keys check
+│   └── check-secrets.sh    ← Scans tracked files for leaked secrets
+└── .githooks/
+    └── pre-commit          ← Runs validation + secret scan before commit
 ```
 
-1. Edit `docker/Dockerfile` (e.g. bump `OPENCLAW_VERSION`, add a binary)
-2. Commit and push to GitHub
-3. Build and push image: `bash scripts/build-and-push.sh`
-4. From the **infra repo**: `make deploy` (pulls new image from GHCR and restarts)
+---
 
-## Working with Skills
+## Configuration Reference
 
-This repository includes a minimal set of generic skills in `config/skills-manifest.txt`. You can extend OpenClaw by adding ClawHub skills or creating custom skills.
+### `config/openclaw.json`
 
-### ClawHub Skills
+| Key | Value | Notes |
+|-----|-------|-------|
+| `gateway.port` | `7860` | HF Spaces requirement |
+| `gateway.token` | `${OPENCLAW_GATEWAY_TOKEN}` | Set in Space secrets |
+| `agents.defaults.model.primary` | `google/gemini-2.5-flash` | Free-tier friendly |
+| `skills.shell.enabled` | `false` | **Disabled** for security |
+| `skills.playwright.enabled` | `true` | Headless Chromium browsing |
+| `skills.fs.enabled` | `true` | Sandboxed to `/app/data/workspace` |
+| `skills.slidespeak.enabled` | `true` | Presentation generation |
+| `auth.profiles.google:studio` | `provider: google, mode: token` | Uses `GOOGLE_API_KEY` |
+| `storage.mode` | `${STORAGE_MODE:-local}` | `local` or `supabase` |
+| `storage.supabase.*` | env var refs | Only used when `STORAGE_MODE=supabase` |
 
-[ClawHub](https://clawhub.ai/) is the community skill registry for OpenClaw. To add a ClawHub skill:
+### `config/SOUL.md`
 
-1. **Find the skill** at [clawhub.ai](https://clawhub.ai/) (e.g., `pdf`, `ms-office-suite`, `jira`)
-2. **Add to manifest**: Edit `config/skills-manifest.txt` and add the skill name
-   ```
-   # PDF processing
-   pdf
-   ```
-3. **Rebuild and deploy**:
-   ```bash
-   bash scripts/build-and-push.sh
-   # Then from infra repo:
-   make deploy
-   ```
+Defines the agent's persona: peer-like CS study partner. LaTeX for all math,
+clean modular code, structured Markdown output.
 
-The `entrypoint.sh` script auto-installs skills from the manifest on container startup via `clawhub install`.
+### `config/HEARTBEAT.md`
 
-### Custom Skills
+| Task | Schedule | Description |
+|------|----------|-------------|
+| Assignment Digest | `0 8 * * *` (08:00 UTC daily) | Scans `Assignments/` for new PDFs, summarizes each |
+| Tech Brief | `30 8 * * 1-5` (08:30 UTC weekdays) | Top 3 CS/tech headlines (requires `BRAVE_API_KEY`) |
 
-Custom skills are user-defined commands or workflows. To create one:
+### `config/skills-manifest.txt`
 
-1. **Create the skill directory**:
-   ```bash
-   mkdir -p skills/my-skill
-   ```
+ClawHub skills auto-installed on container startup:
 
-2. **Write the skill manifest** (`skills/my-skill/skill.json`):
-   ```json
-   {
-     "name": "my-skill",
-     "version": "1.0.0",
-     "description": "My custom skill",
-     "commands": {
-       "my-command": {
-         "handler": "my-command.sh"
-       }
-     }
-   }
-   ```
+| Skill | Use Case |
+|-------|----------|
+| `yt` | YouTube transcript fetching, video search |
+| `agent-browser` | Headless browser for JS-heavy / paywalled pages |
+| `conventional-commits` | Standardized commit message formatting |
+| `github` | GitHub issues, PRs, CI via `gh` CLI |
 
-3. **Write the handler** (`skills/my-skill/my-command.sh`):
-   ```bash
-   #!/bin/bash
-   # Your custom logic here
-   echo "Hello from my-skill!"
-   ```
+Add more from [clawhub.ai](https://clawhub.ai/) — one name per line.
 
-4. **Make it executable**:
-   ```bash
-   chmod +x skills/my-skill/my-command.sh
-   ```
+---
 
-5. **Push to VPS**:
-   ```bash
-   # From the infra repo:
-   make push-config
-   ```
+## Environment Variables
 
-   Custom skills in `skills/` are copied to `~/.openclaw/workspace/skills/` on the VPS.
+All sensitive values are injected via environment variables — **never hardcoded**.
 
-6. **Use in OpenClaw**:
-   - Via chat: "Run my-command"
-   - Via Telegram: `/my-command`
+| Variable | Default | Set In |
+|----------|---------|--------|
+| `GOOGLE_API_KEY` | — | HF Space secret |
+| `OPENCLAW_GATEWAY_TOKEN` | — | HF Space secret |
+| `OPENCLAW_GATEWAY_PORT` | `7860` | Dockerfile |
+| `OPENCLAW_HOME` | `/app/data` | Dockerfile |
+| `TELEGRAM_BOT_TOKEN` | — | HF Space secret (optional) |
+| `GH_TOKEN` | — | HF Space secret (optional) |
+| `BRAVE_API_KEY` | — | HF Space secret (optional) |
+| `STORAGE_MODE` | `local` | HF Space secret (optional) |
+| `SUPABASE_URL` | — | HF Space secret (optional) |
+| `SUPABASE_ANON_KEY` | — | HF Space secret (optional) |
+| `SUPABASE_SERVICE_ROLE_KEY` | — | HF Space secret (optional) |
+| `SUPABASE_STORAGE_BUCKET` | `openclaw-workspace` | HF Space secret (optional) |
+| `CHROMIUM_PATH` | `/usr/bin/chromium` | Dockerfile |
+| `BROWSER_FLAGS` | `--no-sandbox ...` | Dockerfile |
 
-### Skill Structure Reference
+---
 
-OpenClaw skills can include:
-- **Slash commands** — callable via `/command-name`
-- **Hooks** — triggered on events (e.g., before tool execution)
-- **Templates** — prompt templates for common workflows
-- **Tools** — custom tool definitions
+## Security
 
-For detailed skill development documentation, see the [OpenClaw Skill Development Guide](https://docs.openclaw.ai/skills).
+- **Non-root execution** — container runs as `node` (UID 1000)
+- **Shell disabled** — `skills.shell.enabled: false` in config
+- **API keys via env only** — no secrets in code or config files
+- **Chromium sandboxing** — `--no-sandbox` is safe inside container isolation
+- **Security rules** — `config/security-rules.md` is injected into the system
+  prompt (prompt-injection defense, secret protection, side-effect confirmation)
+- **FS sandboxed** — file operations restricted to `/app/data/workspace`
+- **Pre-commit hook** — validates config and scans for leaked secrets
 
-### Included Skills
+---
 
-The default configuration includes these generic ClawHub skills:
+## Persistent Storage with Supabase (Optional)
 
-| Skill | Description | Use Case |
-|-------|-------------|----------|
-| `yt` | YouTube transcript fetching and video search | "Get transcript for youtube.com/watch?v=..." |
-| `agent-browser` | Headless browser for JavaScript-heavy/paywalled pages | Access dynamic content |
-| `system-monitor` | CPU/RAM/GPU status check | "What's my server's CPU usage?" |
-| `conventional-commits` | Format commit messages per convention | Standardized commit messages |
+HF Spaces containers are **ephemeral** — local files and conversation history
+are lost on every restart. To persist data, connect a free
+[Supabase](https://supabase.com/) project.
 
-These are intentionally minimal — add your own skills based on your workflows.
+### What Gets Persisted
 
-## Workspace Git Sync (Optional)
-
-Back up your `~/.openclaw/workspace` directory to a private GitHub repo automatically. Runs as a Docker sidecar container with built-in cron, pushing to a configurable branch (default: `auto`). You can then manually merge `auto` into `main` via PR whenever you want.
+| Data | Storage Type | Supabase Feature |
+|------|-------------|------------------|
+| Conversations & chat history | Database rows | PostgreSQL |
+| Agent memory & state | Database rows | PostgreSQL |
+| Workspace files (docs, PDFs, summaries) | Object storage | Supabase Storage |
 
 ### Setup
 
-1. **Create a private GitHub repo** (e.g. `your-username/openclaw-workspace`)
-2. **Create a GitHub PAT** at [github.com/settings/tokens](https://github.com/settings/tokens) with `repo` scope
-3. **Add to your `.env`** (or infra repo's `secrets/openclaw.env`):
+1. **Create a free Supabase project** at [supabase.com/dashboard](https://supabase.com/dashboard)
+2. **Copy your credentials** from **Project Settings → API**:
+   - Project URL (e.g. `https://xyzcompany.supabase.co`)
+   - `anon` public key
+   - `service_role` secret key
+3. **Create a storage bucket** named `openclaw-workspace`:
+   - Go to **Storage** in the Supabase dashboard
+   - Click **New bucket** → name it `openclaw-workspace` → set it **private**
+4. **Add secrets** to your HF Space (Settings → Repository secrets):
    ```
-   GIT_WORKSPACE_REPO=your-username/openclaw-workspace
-   GIT_WORKSPACE_BRANCH=auto
-   GIT_WORKSPACE_TOKEN=ghp_your_personal_access_token
-   GIT_WORKSPACE_SYNC_SCHEDULE=0 4 * * *
+   STORAGE_MODE=supabase
+   SUPABASE_URL=https://xyzcompany.supabase.co
+   SUPABASE_ANON_KEY=eyJhbGciOi...
+   SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...
+   SUPABASE_STORAGE_BUCKET=openclaw-workspace
    ```
-4. **Deploy** — the sidecar auto-enables when `GIT_WORKSPACE_REPO` is set:
-   ```bash
-   # From infra repo:
-   make push-env && make deploy
-   ```
-
-The sidecar runs an initial sync on startup, then syncs on the configured cron schedule (default: daily at 4 AM UTC).
-
-### Manual Sync
-
-```bash
-# From infra repo:
-make workspace-sync
-```
+5. **Restart** the Space — the entrypoint will confirm Supabase is active in logs
 
 ### Disable
 
-Remove or clear `GIT_WORKSPACE_REPO` from your `.env` and redeploy.
+Remove `STORAGE_MODE` (or set it to `local`) and restart. The agent will fall
+back to ephemeral local storage.
 
-## Accessing the Dashboard
+### Cost
 
-The gateway binds to loopback only (`127.0.0.1:18789`). Access it via SSH tunnel:
+Supabase's free tier includes 500 MB database + 1 GB storage — more than enough
+for a personal agent.
 
-```bash
-ssh -N -L 18789:127.0.0.1:18789 openclaw@VPS_IP
+---
+
+## Customization
+
+### Change the model
+
+Edit `config/openclaw.json` → `agents.defaults.model.primary`:
+
+```json
+"primary": "google/gemini-2.5-pro"
 ```
 
-Then open `http://localhost:18789` in your browser.
+### Add a ClawHub skill
 
-## Managing Secrets
+Edit `config/skills-manifest.txt`, add the skill name, commit & push.
 
-Secrets (API keys, tokens) are managed by the **infra repo**, not this repo.
-This repo only contains `docker/.env.example` as documentation of what
-variables are required.
+### Add a custom skill
 
-In the infra repo:
-- Edit `secrets/openclaw.env`
-- Run `make push-env` to push to VPS and restart
+Create a directory under `workspace-templates/skills/my-skill/` with a
+`skill.json` manifest and handler scripts. They'll be seeded into the workspace
+on first boot.
 
-## Docker Image Versioning
+### Switch to Anthropic Claude
 
-Images are built locally and pushed to GHCR via `scripts/build-and-push.sh`:
+1. Change `agents.defaults.model.primary` to `anthropic/claude-sonnet-4-20250514`
+2. Update `auth` section: provider `anthropic`, mode `token`
+3. Add `ANTHROPIC_API_KEY` as a Space secret
 
-- `ghcr.io/YOUR_USERNAME/openclaw-docker-config/openclaw-gateway:latest` — main gateway image
-- `ghcr.io/YOUR_USERNAME/openclaw-docker-config/workspace-sync:latest` — workspace git sync sidecar
-- Both images also get a `:<sha>` tag pinned to the git commit
+---
 
-**One-time GHCR login (laptop):**
+## Development
 
-```bash
-# Create a PAT at github.com/settings/tokens with write:packages scope
-echo "$GHCR_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
-```
-
-**Rollback to a previous version:**
-
-```bash
-# On the VPS, in ~/openclaw/:
-# Edit docker-compose.yml, change :latest to the SHA tag (e.g. :abc1234)
-docker compose pull && docker compose up -d
-```
-
-**Upgrade OpenClaw itself:** bump `OPENCLAW_VERSION` in `docker/Dockerfile`, commit, push, then run `scripts/build-and-push.sh` followed by `make deploy` from the infra repo.
-
-## Troubleshooting
-
-### Container won't start
-
-```bash
-# From the infra repo:
-make logs
-# Or SSH in:
-cd ~/openclaw && docker compose logs openclaw-gateway
-```
-
-Check for missing environment variables or invalid config JSON.
-
-### "Permission denied" on config directory
-
-Ensure the host directories exist and are owned by the correct user:
-
-```bash
-sudo mkdir -p /home/openclaw/.openclaw/workspace
-sudo chown -R 1000:1000 /home/openclaw/.openclaw
-```
-
-### Telegram bot not responding
-
-- Check secrets: `make push-env` from infra repo to re-push
-- Check that no other process is polling the same bot token
-- Restart: `make deploy` from infra repo
-
-### Config validation fails
-
-```bash
-bash scripts/validate-config.sh
-```
-
-Common causes:
-- Invalid JSON syntax (missing comma, trailing comma)
-- Raw API key accidentally pasted into `openclaw.json`
-
-### Check VPS health
-
-```bash
-# From the infra repo:
-make status
-```
-
-## Enable Git Hooks
-
-To activate the pre-commit validation hook:
+### Enable pre-commit hook
 
 ```bash
 git config core.hooksPath .githooks
 ```
+
+### Validate config locally
+
+```bash
+bash scripts/validate-config.sh
+bash scripts/check-secrets.sh
+```
+
+### Build & test locally
+
+```bash
+docker build -t openclaw-cs .
+docker run --rm -p 7860:7860 \
+  -e GOOGLE_API_KEY=your-key \
+  -e OPENCLAW_GATEWAY_TOKEN=your-token \
+  openclaw-cs
+```
+
+Then open `http://localhost:7860`.
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| Space shows "Building" forever | Check build logs; ensure `GOOGLE_API_KEY` is set |
+| "Permission denied" errors | Verify `chown node:node` in Dockerfile covers all data dirs |
+| Chromium crashes | Confirm `BROWSER_FLAGS` includes `--no-sandbox --disable-dev-shm-usage` |
+| Skills not installing | Check network access; ClawHub registry must be reachable |
+| Gateway not accessible | Ensure port is `7860` in both config and Dockerfile |
+
+---
+
+## License
+
+[MIT](LICENSE)
