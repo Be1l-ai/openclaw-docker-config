@@ -68,8 +68,9 @@ RUN corepack enable \
 # ── App directory structure ─────────────────────────────────────────────────
 # /app/data    → OPENCLAW_HOME  (config, workspace, runtime state)
 # /app/config  → baked-in config files (copied to data dir at first boot)
-RUN mkdir -p /app/data/workspace /app/config /.clawhub \
-  && chown -R node:node /app /.clawhub
+# ~/.openclaw  → where OpenClaw CLI looks for config at runtime
+RUN mkdir -p /app/data/workspace /app/config /.clawhub /home/node/.openclaw/workspace \
+  && chown -R node:node /app /.clawhub /home/node/.openclaw
 
 COPY --chown=node:node config/                /app/config/
 COPY --chown=node:node workspace-templates/   /app/workspace-templates/

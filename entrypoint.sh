@@ -12,19 +12,27 @@ set -euo pipefail
 
 CONFIG_SRC="/app/config"
 CONFIG_DST="${OPENCLAW_HOME:-/app/data}"
+OCLAW_DIR="$HOME/.openclaw"
 WORKDIR="$CONFIG_DST/workspace"
 MANIFEST="$CONFIG_SRC/skills-manifest.txt"
 TEMPLATES="/app/workspace-templates"
 
 ###############################################################################
-# 1. Seed config files into OPENCLAW_HOME (no-clobber)
+# 1. Seed config files into OPENCLAW_HOME and ~/.openclaw/ (no-clobber)
 ###############################################################################
 echo "[entrypoint] Setting up config in $CONFIG_DST ..."
+mkdir -p "$OCLAW_DIR"
 for f in openclaw.json security-rules.md SOUL.md HEARTBEAT.md; do
   if [[ -f "$CONFIG_SRC/$f" ]]; then
     cp -n "$CONFIG_SRC/$f" "$CONFIG_DST/$f" 2>/dev/null || true
+    cp -n "$CONFIG_SRC/$f" "$OCLAW_DIR/$f" 2>/dev/null || true
   fi
 done
+
+# Symlink workspace into ~/.openclaw so OpenClaw CLI resolves it
+if [[ ! -e "$OCLAW_DIR/workspace" ]]; then
+  ln -s "$WORKDIR" "$OCLAW_DIR/workspace"
+fi
 
 ###############################################################################
 # 2. Seed workspace templates (no-clobber)
@@ -58,7 +66,7 @@ if [[ -f "$MANIFEST" ]]; then
     fi
 
     echo "[entrypoint]   → installing $line"
-    clawhub install "$line" --workdir "$WORKDIR" || {
+    clawhub install "$line" --force --workdir "$WORKDIR" || {
       echo "[entrypoint] WARNING: Failed to install $line — continuing"
     }
   done < "$MANIFEST"
