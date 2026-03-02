@@ -11,11 +11,14 @@ FOUND=0
 PATTERNS=(
   'sk-ant-[A-Za-z0-9_-]{20,}'
   'sk-proj-[A-Za-z0-9_-]{20,}'
+  'AIzaSy[A-Za-z0-9_-]{33}'
   'bot[0-9]{8,}:[A-Za-z0-9_-]{30,}'
   'bsc_[A-Za-z0-9]{20,}'
   'xai-[A-Za-z0-9]{20,}'
   'gsk_[A-Za-z0-9]{20,}'
-  '[A-Za-z0-9+/]{40,}={0,2}'
+  'ghp_[A-Za-z0-9]{36,}'
+  'sbp_[A-Za-z0-9]{40,}'
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]{50,}'
   'Bearer [A-Za-z0-9._-]{20,}'
 )
 
