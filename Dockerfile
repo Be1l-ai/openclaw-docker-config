@@ -84,4 +84,4 @@ WORKDIR /app
 EXPOSE 7860
 
 ENTRYPOINT ["tini", "--", "entrypoint.sh"]
-CMD ["openclaw", "gateway", "--bind", "0.0.0.0", "--port", "7860"]
+CMD ["openclaw", "gateway", "--bind", "lan", "--port", "7860"]
