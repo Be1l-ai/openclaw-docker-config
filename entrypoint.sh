@@ -11,29 +11,38 @@ set -euo pipefail
 # =============================================================================
 
 CONFIG_SRC="/app/config"
-CONFIG_DST="${OPENCLAW_HOME:-/app/data}"
-OCLAW_DIR="$HOME/.openclaw"
-WORKDIR="$CONFIG_DST/workspace"
+OCLAW_HOME="${OPENCLAW_HOME:-/app/data}"
+STATE_DIR="$OCLAW_HOME/.openclaw"      # where OpenClaw actually reads config/state
+WORKDIR="$OCLAW_HOME/workspace"
 MANIFEST="$CONFIG_SRC/skills-manifest.txt"
 TEMPLATES="/app/workspace-templates"
 
 ###############################################################################
-# 1. Seed config files into OPENCLAW_HOME and ~/.openclaw/
+# 1. Seed config files into $OPENCLAW_HOME/.openclaw/  (the ONLY state dir)
 ###############################################################################
-# Force-copy to ~/.openclaw/ (always overwrite — ensures config is fresh).
-# No-clobber copy to OPENCLAW_HOME (preserves user edits at runtime).
-echo "[entrypoint] Setting up config in $CONFIG_DST ..."
-mkdir -p "$OCLAW_DIR"
+# OpenClaw reads config from $OPENCLAW_HOME/.openclaw/openclaw.json.
+# Force-copy every boot so config stays in sync with the image.
+echo "[entrypoint] Setting up config in $STATE_DIR ..."
+mkdir -p "$STATE_DIR"
 for f in openclaw.json security-rules.md SOUL.md HEARTBEAT.md; do
   if [[ -f "$CONFIG_SRC/$f" ]]; then
-    cp -n "$CONFIG_SRC/$f" "$CONFIG_DST/$f" 2>/dev/null || true
-    cp -f "$CONFIG_SRC/$f" "$OCLAW_DIR/$f"
+    cp -f "$CONFIG_SRC/$f" "$STATE_DIR/$f"
   fi
 done
 
-# Symlink workspace into ~/.openclaw so OpenClaw CLI resolves it
-if [[ ! -e "$OCLAW_DIR/workspace" ]]; then
-  ln -s "$WORKDIR" "$OCLAW_DIR/workspace"
+# Symlink workspace into the state dir so the CLI resolves it
+if [[ ! -e "$STATE_DIR/workspace" ]]; then
+  ln -s "$WORKDIR" "$STATE_DIR/workspace"
+fi
+
+# Remove stale ~/.openclaw if it differs from STATE_DIR (avoids "multiple
+# state directories" warning from doctor).
+if [[ -d "$HOME/.openclaw" && "$(realpath "$HOME/.openclaw")" != "$(realpath "$STATE_DIR")" ]]; then
+  rm -rf "$HOME/.openclaw"
+fi
+# Point ~/.openclaw → STATE_DIR so any CLI invocation finds the same state
+if [[ ! -e "$HOME/.openclaw" ]]; then
+  ln -s "$STATE_DIR" "$HOME/.openclaw"
 fi
 
 ###############################################################################
@@ -96,7 +105,17 @@ else
 fi
 
 ###############################################################################
-# 5. Auto-fix config migrations (telegram auto-enable, legacy keys, etc.)
+# 5. Export GEMINI_API_KEY for semantic memory / embeddings
+###############################################################################
+# OpenClaw memory search needs a known embedding key.
+# Re-use the same Google AI Studio key the user already provides.
+if [[ -z "${GEMINI_API_KEY:-}" && -n "${GOOGLE_API_KEY:-}" ]]; then
+  export GEMINI_API_KEY="$GOOGLE_API_KEY"
+  echo "[entrypoint] GEMINI_API_KEY exported from GOOGLE_API_KEY (for embeddings)"
+fi
+
+###############################################################################
+# 6. Auto-fix config migrations (telegram auto-enable, legacy keys, etc.)
 ###############################################################################
 echo "[entrypoint] Running openclaw doctor --fix ..."
 openclaw doctor --fix 2>&1 || {
@@ -104,7 +123,7 @@ openclaw doctor --fix 2>&1 || {
 }
 
 ###############################################################################
-# 6. Hand off to CMD
+# 7. Hand off to CMD
 ###############################################################################
 echo "[entrypoint] Starting OpenClaw gateway on port ${OPENCLAW_GATEWAY_PORT:-7860} ..."
 exec "$@"
