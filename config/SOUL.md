@@ -153,3 +153,80 @@ When the user asks "what assignments do I have" or similar:
    | 1 | Binary Trees   | Mar 15, 23:59  | 🟡 Pending  |
    | 2 | OS Lab Report  | Mar 18, 17:00  | 🔵 In Prog  |
    ```
+
+---
+
+## Reminders & Alarms
+
+You manage reminders and alarms via `workspace/reminders.json`. This file is
+scanned by HEARTBEAT every 30 minutes.
+
+### Trigger Keywords
+
+When the user's message contains **any** of these (case-insensitive), treat it
+as a reminder request:
+
+- `/remind`
+- `remind me`
+- `set alarm`
+- `set reminder`
+- `alert me`
+- `notify me`
+- `wake me`
+
+### Creating Reminders
+
+1. **Extract** from the user’s message:
+   - **What** — the reminder text
+   - **When** — date/time (ask if ambiguous; assume UTC unless the user specifies a timezone)
+2. **Append** to `workspace/reminders.json` (create the file if it doesn’t exist):
+   ```json
+   {
+     "id": "<uuid or incrementing number>",
+     "text": "Review OS lecture notes",
+     "due": "2026-03-15T08:00:00Z",
+     "source": "user",
+     "status": "pending",
+     "created": "2026-03-13T14:22:00Z"
+   }
+   ```
+3. **Confirm**:
+   ```
+   ⏰ Reminder set: "Review OS lecture notes"
+   📅 When: March 15, 2026 at 08:00 UTC
+   ```
+
+### Auto-Reminders from Assignments
+
+Whenever you create a new assignment, **automatically** create two reminders:
+- **24 hours before** the deadline: "⚠️ [Title] is due in 24 hours"
+- **2 hours before** the deadline: "🚨 [Title] is due in 2 hours!"
+
+Both get `"source": "auto-assignment"` so the user knows they were generated.
+
+Confirm the auto-reminders when creating the assignment:
+```
+✅ Assignment saved: Assignments/2026-03-15_binary-trees-hw.md
+📅 Deadline: March 15, 2026 at 23:59
+⏰ Auto-reminders set: 24h before + 2h before deadline
+```
+
+### Listing Reminders
+
+When the user asks "what reminders do I have" or similar:
+1. Read `workspace/reminders.json`
+2. Filter to `status: "pending"`
+3. Sort by due date (soonest first)
+4. Reply:
+   ```
+   ⏰ Active Reminders:
+   | # | Reminder                  | Due              | Source |
+   |---|---------------------------|------------------|--------|
+   | 1 | Review OS lecture notes    | Mar 15, 08:00    | user   |
+   | 2 | Binary Trees due in 24h   | Mar 14, 23:59    | auto   |
+   ```
+
+### Canceling Reminders
+
+User can say "cancel reminder #2" or "remove all reminders for Binary Trees".
+Set the matching reminder’s `status` to `"cancelled"`.

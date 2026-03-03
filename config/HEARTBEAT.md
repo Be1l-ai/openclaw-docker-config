@@ -67,3 +67,38 @@ for a user prompt.
 
 - Only runs if `BRAVE_API_KEY` is configured (skip otherwise).
 - Keep the brief concise — max 10 lines.
+
+---
+
+## 3. Reminder & Alarm Check
+
+| Field    | Value |
+|----------|-------|
+| Schedule | `*/30 * * * *` (every 30 minutes) |
+| Scope    | `workspace/reminders.json` |
+
+### Steps
+
+1. **Read** `workspace/reminders.json`. If the file doesn’t exist or is empty,
+   skip silently.
+2. **Check** each reminder with `status: "pending"`:
+   - If the `due` timestamp is **now or in the past**, the reminder has fired.
+3. **For each fired reminder**, post a message to the active channel:
+   ```
+   ⏰ Reminder: <text>
+   (set on <created date>)
+   ```
+   Then update that reminder’s `status` to `"fired"` in the JSON file.
+4. **For reminders due within the next 60 minutes**, post a heads-up
+   (only once — check if already notified by looking for a `"warned": true`
+   flag):
+   ```
+   ⚠️ Upcoming: "<text>" in ~<minutes> minutes
+   ```
+   Set `"warned": true` on the reminder to avoid duplicate warnings.
+
+### Conditions
+
+- Never post about reminders with status `"fired"` or `"cancelled"`.
+- If multiple reminders fire at once, combine them into a single message.
+- If `reminders.json` is malformed, log a warning and skip (don’t crash).

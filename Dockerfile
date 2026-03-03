@@ -59,17 +59,17 @@ ENV OPENCLAW_GATEWAY_PORT=7860 \
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 
-ARG OPENCLAW_VERSION=2026.2.6-3
+ARG OPENCLAW_VERSION=2026.3.1
 
 RUN corepack enable \
   && corepack prepare pnpm@latest --activate \
   && pnpm install -g openclaw@${OPENCLAW_VERSION} clawhub
 
-# ── App directory structure ─────────────────────────────────────────────────
+# ── App directory structure ─────────────────────────────────────────────────────
 # /app/data    → OPENCLAW_HOME  (config, workspace, runtime state)
 # /app/config  → baked-in config files (copied to data dir at first boot)
 # ~/.openclaw  → where OpenClaw CLI looks for config at runtime
-RUN mkdir -p /app/data/workspace /app/config /.clawhub /home/node/.openclaw/workspace \
+RUN mkdir -p /app/data/workspace/skills /app/config /.clawhub /home/node/.openclaw/workspace \
   && chown -R node:node /app /.clawhub /home/node/.openclaw
 
 COPY --chown=node:node config/                /app/config/
