@@ -18,14 +18,16 @@ MANIFEST="$CONFIG_SRC/skills-manifest.txt"
 TEMPLATES="/app/workspace-templates"
 
 ###############################################################################
-# 1. Seed config files into OPENCLAW_HOME and ~/.openclaw/ (no-clobber)
+# 1. Seed config files into OPENCLAW_HOME and ~/.openclaw/
 ###############################################################################
+# Force-copy to ~/.openclaw/ (always overwrite — ensures config is fresh).
+# No-clobber copy to OPENCLAW_HOME (preserves user edits at runtime).
 echo "[entrypoint] Setting up config in $CONFIG_DST ..."
 mkdir -p "$OCLAW_DIR"
 for f in openclaw.json security-rules.md SOUL.md HEARTBEAT.md; do
   if [[ -f "$CONFIG_SRC/$f" ]]; then
     cp -n "$CONFIG_SRC/$f" "$CONFIG_DST/$f" 2>/dev/null || true
-    cp -n "$CONFIG_SRC/$f" "$OCLAW_DIR/$f" 2>/dev/null || true
+    cp -f "$CONFIG_SRC/$f" "$OCLAW_DIR/$f"
   fi
 done
 
@@ -94,7 +96,15 @@ else
 fi
 
 ###############################################################################
-# 5. Hand off to CMD
+# 5. Auto-fix config migrations (telegram auto-enable, legacy keys, etc.)
+###############################################################################
+echo "[entrypoint] Running openclaw doctor --fix ..."
+openclaw doctor --fix 2>&1 || {
+  echo "[entrypoint] WARNING: openclaw doctor --fix had issues — continuing"
+}
+
+###############################################################################
+# 6. Hand off to CMD
 ###############################################################################
 echo "[entrypoint] Starting OpenClaw gateway on port ${OPENCLAW_GATEWAY_PORT:-7860} ..."
 exec "$@"
