@@ -11,6 +11,10 @@
 
 FROM node:22-bookworm
 
+# ── DNS: ensure reliable resolution (HF internal DNS can be flaky) ───────────
+RUN echo 'nameserver 8.8.8.8' > /etc/resolv.conf.fallback \
+  && echo 'nameserver 8.8.4.4' >> /etc/resolv.conf.fallback
+
 # ── System dependencies ─────────────────────────────────────────────────────
 # Chromium headless + fonts for web scraping / PDF rendering / screenshots.
 # tini ensures proper PID-1 signal handling inside the container.

@@ -123,18 +123,100 @@ if [[ -z "${GEMINI_API_KEY:-}" && -n "${GOOGLE_API_KEY:-}" ]]; then
 fi
 
 ###############################################################################
-# 6. Auto-fix config migrations (telegram auto-enable, legacy keys, etc.)
+# 6. Network checks (DNS & Telegram API reachability)
+###############################################################################
+# Append Google public DNS as fallback if resolution is unreliable
+if ! getent hosts api.telegram.org >/dev/null 2>&1; then
+  echo "[entrypoint] WARNING: Cannot resolve api.telegram.org with default DNS"
+  if [[ -w /etc/resolv.conf ]]; then
+    echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+    echo "[entrypoint] Added Google DNS fallback to /etc/resolv.conf"
+  else
+    echo "[entrypoint] /etc/resolv.conf not writable — setting NODE_DNS_RESULT_ORDER"
+  fi
+fi
+
+# Quick connectivity test to Telegram API
+if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
+  echo "[entrypoint] Testing Telegram API connectivity ..."
+  HTTP_CODE=$(curl -sf -o /dev/null -w '%{http_code}' \
+    --connect-timeout 10 --max-time 15 \
+    "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" 2>/dev/null || echo "000")
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    echo "[entrypoint] Telegram API: reachable (HTTP $HTTP_CODE)"
+  elif [[ "$HTTP_CODE" == "401" ]]; then
+    echo "[entrypoint] ERROR: Telegram bot token is INVALID (HTTP 401). Check TELEGRAM_BOT_TOKEN in HF secrets."
+  elif [[ "$HTTP_CODE" == "000" ]]; then
+    echo "[entrypoint] WARNING: Cannot reach api.telegram.org — network blocked or DNS failure"
+    echo "[entrypoint]   Telegram will not work until outbound HTTPS is available"
+  else
+    echo "[entrypoint] Telegram API: unexpected response (HTTP $HTTP_CODE)"
+  fi
+else
+  echo "[entrypoint] TELEGRAM_BOT_TOKEN not set — Telegram channel disabled"
+fi
+
+###############################################################################
+# 7. Auto-fix config migrations (telegram auto-enable, legacy keys, etc.)
 ###############################################################################
 echo "[entrypoint] Running openclaw doctor --fix ..."
 openclaw doctor --fix 2>&1 || {
   echo "[entrypoint] WARNING: openclaw doctor --fix had issues — continuing"
 }
 
-# Ensure auto-approve is set (in case config key was rejected by doctor)
-openclaw config set gateway.autoApproveDevices true 2>/dev/null || true
-
 ###############################################################################
-# 7. Hand off to CMD
+# 8. Start gateway & auto-approve first pending device
 ###############################################################################
+# Start the gateway in the background so we can run CLI commands against it.
+# This is the "foreground" mode the doctor recommends for containers —
+# we manage the PID ourselves instead of relying on systemd.
 echo "[entrypoint] Starting OpenClaw gateway on port ${OPENCLAW_GATEWAY_PORT:-7860} ..."
-exec "$@"
+"$@" &
+GATEWAY_PID=$!
+
+# Wait for gateway to be ready (up to 30 s)
+echo "[entrypoint] Waiting for gateway to accept connections ..."
+for i in $(seq 1 30); do
+  if curl -sf http://127.0.0.1:${OPENCLAW_GATEWAY_PORT:-7860}/health >/dev/null 2>&1; then
+    echo "[entrypoint] Gateway is ready."
+    break
+  fi
+  sleep 1
+done
+
+# Auto-approve the first pending device request (that's us via the web UI)
+echo "[entrypoint] Auto-approving pending device requests ..."
+sleep 3   # give the first WS connection a moment to register
+REQUEST_ID=$(openclaw devices list 2>/dev/null | grep -oP '(?<=id:\s)\S+' | head -1 || true)
+if [[ -z "$REQUEST_ID" ]]; then
+  # Try alternative output format
+  REQUEST_ID=$(openclaw devices list 2>/dev/null | awk '/pending/{print $1; exit}' || true)
+fi
+if [[ -n "$REQUEST_ID" ]]; then
+  openclaw devices approve "$REQUEST_ID" 2>/dev/null && \
+    echo "[entrypoint] Approved device: $REQUEST_ID" || \
+    echo "[entrypoint] WARNING: Failed to approve device $REQUEST_ID"
+else
+  echo "[entrypoint] No pending device requests found (will approve on first web connection)."
+fi
+
+# Keep a background loop that checks for new pending devices every 30s
+# for the first 5 minutes (covers slow first-connect scenarios)
+(
+  for attempt in $(seq 1 10); do
+    sleep 30
+    PENDING=$(openclaw devices list 2>/dev/null | grep -i pending || true)
+    if [[ -n "$PENDING" ]]; then
+      RID=$(echo "$PENDING" | grep -oP '(?<=id:\s)\S+' | head -1 || echo "")
+      [[ -z "$RID" ]] && RID=$(echo "$PENDING" | awk '{print $1; exit}')
+      if [[ -n "$RID" ]]; then
+        openclaw devices approve "$RID" 2>/dev/null && \
+          echo "[entrypoint] Auto-approved device: $RID"
+      fi
+    fi
+  done
+) &
+
+# Wait on the gateway — if it exits, the container exits
+wait $GATEWAY_PID
