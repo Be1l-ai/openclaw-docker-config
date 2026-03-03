@@ -23,26 +23,34 @@ TEMPLATES="/app/workspace-templates"
 # OpenClaw reads config from $OPENCLAW_HOME/.openclaw/openclaw.json.
 # Force-copy every boot so config stays in sync with the image.
 echo "[entrypoint] Setting up config in $STATE_DIR ..."
-mkdir -p "$STATE_DIR"
+mkdir -p "$STATE_DIR/agents/main/sessions" \
+         "$STATE_DIR/credentials" \
+         "$STATE_DIR/logs"
 for f in openclaw.json security-rules.md SOUL.md HEARTBEAT.md; do
   if [[ -f "$CONFIG_SRC/$f" ]]; then
     cp -f "$CONFIG_SRC/$f" "$STATE_DIR/$f"
   fi
 done
 
+# Lock down permissions (doctor expects 700 / 600)
+chmod 700 "$STATE_DIR"
+chmod 600 "$STATE_DIR/openclaw.json" 2>/dev/null || true
+
 # Symlink workspace into the state dir so the CLI resolves it
 if [[ ! -e "$STATE_DIR/workspace" ]]; then
   ln -s "$WORKDIR" "$STATE_DIR/workspace"
 fi
 
-# Remove stale ~/.openclaw if it differs from STATE_DIR (avoids "multiple
-# state directories" warning from doctor).
-if [[ -d "$HOME/.openclaw" && "$(realpath "$HOME/.openclaw")" != "$(realpath "$STATE_DIR")" ]]; then
-  rm -rf "$HOME/.openclaw"
+# Ensure a single state directory — remove any real ~/.openclaw dir/symlink
+# that doesn't already point to STATE_DIR, then symlink it.
+if [[ -e "$HOME/.openclaw" || -L "$HOME/.openclaw" ]]; then
+  RESOLVED="$(realpath "$HOME/.openclaw" 2>/dev/null || echo NONE)"
+  if [[ "$RESOLVED" != "$(realpath "$STATE_DIR")" ]]; then
+    rm -rf "$HOME/.openclaw"
+  fi
 fi
-# Point ~/.openclaw → STATE_DIR so any CLI invocation finds the same state
 if [[ ! -e "$HOME/.openclaw" ]]; then
-  ln -s "$STATE_DIR" "$HOME/.openclaw"
+  ln -sf "$STATE_DIR" "$HOME/.openclaw"
 fi
 
 ###############################################################################
