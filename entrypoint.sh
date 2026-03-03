@@ -130,6 +130,9 @@ openclaw doctor --fix 2>&1 || {
   echo "[entrypoint] WARNING: openclaw doctor --fix had issues — continuing"
 }
 
+# Ensure auto-approve is set (in case config key was rejected by doctor)
+openclaw config set gateway.autoApproveDevices true 2>/dev/null || true
+
 ###############################################################################
 # 7. Hand off to CMD
 ###############################################################################
