@@ -8,27 +8,20 @@
     "controlUi": {
       "dangerouslyAllowHostHeaderOriginFallback": true
     },
-    "trustedProxies": ["10.0.0.0/8", "172.16.0.0/12"],
-    "autoApproveDevices": true
+    "trustedProxies": ["10.0.0.0/8", "172.16.0.0/12"]
   },
 
   "channels": {
     "telegram": {
       "enabled": true,
       "botToken": "${TELEGRAM_BOT_TOKEN}",
-      "dmPolicy": "pairing",
+      "dmPolicy": "open",
       "groupPolicy": "open",
-      "streamMode": "partial"
+      "streaming": "partial"
     }
   },
 
-  "plugins": {
-    "entries": {
-      "telegram": {
-        "enabled": true
-      }
-    }
-  },
+  "plugins": {},
 
   "agents": {
     "defaults": {

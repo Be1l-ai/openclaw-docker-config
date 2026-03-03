@@ -59,15 +59,12 @@ ENV OPENCLAW_GATEWAY_PORT=7860 \
     NODE_ENV=production \
     TERM=xterm-256color
 
-# ── pnpm + OpenClaw + ClawHub CLI ───────────────────────────────────────────
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-
+# ── OpenClaw + ClawHub CLI ────────────────────────────────────────────────────
+# Use npm (not pnpm) so OpenClaw's bundled plugins resolve to a trusted path
+# under /usr/local/lib/node_modules/ instead of pnpm's content-addressable store.
 ARG OPENCLAW_VERSION=2026.3.1
 
-RUN corepack enable \
-  && corepack prepare pnpm@latest --activate \
-  && pnpm install -g openclaw@${OPENCLAW_VERSION} clawhub
+RUN npm install -g openclaw@${OPENCLAW_VERSION} clawhub
 
 # ── App directory structure ─────────────────────────────────────────────────────
 # /app/data    → OPENCLAW_HOME  (config, workspace, runtime state)
